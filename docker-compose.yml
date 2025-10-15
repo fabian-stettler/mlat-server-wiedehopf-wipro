@@ -1,0 +1,10 @@
+services:
+  mlat-server:
+    build: .
+    image: mlat-server:local
+    container_name: mlat-server
+    ports:
+      - "40147:40147"
+    volumes:
+      - ./workdir:/app/workdir
+    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10"]
