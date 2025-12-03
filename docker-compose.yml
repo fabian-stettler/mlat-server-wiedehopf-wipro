@@ -7,4 +7,4 @@ services:
       - "40147:40147"
     volumes:
       - ./workdir:/app/workdir
-    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10"]
+    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10", "--dump-pseudorange", "./workdir/pseudorange.json"]

@@ -577,6 +577,20 @@ class JsonClient(connection.Connection):
             logging.warn("process_message json ValueError: %s >> %s", self.receiver.user, line)
             return
 
+        # Lightweight debug: persist raw incoming 'mlat' and 'sync' JSON lines
+        # to <work_dir>/client_messages.log for offline inspection. This is
+        # intentionally best-effort and must not raise exceptions that break
+        # normal processing.
+        try:
+            workdir = getattr(self.coordinator, 'work_dir', None)
+            if workdir and (('mlat' in line) or ('sync' in line)):
+                try:
+                    with open(workdir + '/client_messages.log', 'a') as _cf:
+                        _cf.write(line.rstrip('\n') + '\n')
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         self.message_counter += 1
         if 'sync' in msg:
