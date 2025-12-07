@@ -315,6 +315,8 @@ class Coordinator(object):
                 if ac.kalman.valid:
                     s['heading'] = round(ac.kalman.heading, 0)
                     s['speed'] = round(ac.kalman.ground_speed, 0)
+                if ac.last_result_source:
+                    s['mlat_result_source'] = ac.last_result_source
 
             if elapsed_seen > 600:
                 s['tracking_receivers'] = [receiver.uid for receiver in ac.tracking]

@@ -31,7 +31,6 @@ import logging
 glogger = logging.getLogger("tracker")
 
 FORCE_MLAT_INTERVAL = 600
-NO_ADSB_MLAT_SECONDS = 120
 
 class TrackedAircraft(object):
     """A single tracked aircraft."""
@@ -92,6 +91,8 @@ class TrackedAircraft(object):
         self.last_result_var = None
         # last multilateration, distinct receivers
         self.last_result_distinct = None
+        # track whether the most recent MLAT result used ADS-B geodata or Mode S only
+        self.last_result_source = None
         # kalman filter state
         self.kalman = kalman.KalmanStateCA(self.icao)
 
@@ -200,9 +201,7 @@ class Tracker(object):
                     ac.last_force_mlat = now + random.random()
                     ac.force_mlat = False
                     #glogger.warn("reset last_force_mlat {0:06x}".format(ac.icao))
-                if len(ac.tracking) >= 2 and ac.allow_mlat and (
-                        now - ac.last_adsb_time > NO_ADSB_MLAT_SECONDS or ac.sync_bad_percent > 10 or (since_force > FORCE_MLAT_INTERVAL - 15 and since_force < FORCE_MLAT_INTERVAL)
-                        ):
+                if len(ac.tracking) >= 2 and ac.allow_mlat:
                     self.mlat_wanted.add(ac)
                     ac.do_mlat = True
                 else:

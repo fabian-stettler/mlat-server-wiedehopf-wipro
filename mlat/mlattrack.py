@@ -137,6 +137,11 @@ class MlatTracker(object):
         if not decoded or not decoded.address:
             return
 
+        if getattr(decoded, 'DF', None) in (17, 18):
+            message_source = 'adsb'
+        else:
+            message_source = 'mode_s'
+
         ac = self.tracker.aircraft.get(decoded.address)
         if not ac:
             return
@@ -356,6 +361,7 @@ class MlatTracker(object):
         ac.last_result_dof = dof
         ac.last_result_time = cluster_utc
         ac.mlat_result_count += 1
+        ac.last_result_source = message_source
 
         if altitude is not None:
             lat, lon, _ = geodesy.ecef2llh(ecef)
