@@ -33,8 +33,7 @@ RUN pip install --upgrade pip setuptools wheel \
        python-graph-core \
        pygraph \
        pykalman \
-       scikit-base \
-       gcc
+       scikit-base
 
 # Ensure entrypoint is executable; ensure server script is executable if present
 RUN chmod +x /app/docker-entrypoint.sh || true \
