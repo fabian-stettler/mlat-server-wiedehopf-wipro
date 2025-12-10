@@ -108,3 +108,7 @@ The original version by mutability will also work but the wiedehopf client has s
 
 Results get passed back to the clients that contributed to the positions.
 You can also emit all positions to a local feed, see the command-line help.
+
+
+## command für ausführen des extract_mlat_entries.py
+python3 extract_mlat_entries.py --pretty --history
