@@ -8,4 +8,6 @@ services:
       - "30004:30004"
     volumes:
       - ./workdir:/app/workdir
-    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10", "--dump-pseudorange", "./workdir/pseudorange.json", "--beast-connect", "194.209.200.36:30004"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10", "--dump-pseudorange", "./workdir/pseudorange.json", "--beast-connect", "host.docker.internal:31004"]
