@@ -52,6 +52,17 @@ def residual(payload):
     return rem
 
 
+def parity(payload):
+    """Returns the 24-bit Mode S parity for a payload without parity bytes."""
+
+    t = _crc_table
+    rem = 0
+    for b in payload:
+        rem = ((rem & 0xFFFF) << 8) ^ t[b ^ (rem >> 16)]
+
+    return rem & 0xFFFFFF
+
+
 def _make_table():
     # precompute the CRC table
     t = []

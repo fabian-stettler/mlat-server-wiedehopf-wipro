@@ -27,6 +27,7 @@ import numpy
 
 from mlat import constants, geodesy
 from mlat import util, net
+from mlat import beastframes
 
 """
 Various output methods for multilateration results.
@@ -305,6 +306,163 @@ def make_basestation_listener(host, port, coordinator, use_kalman_data):
 
 def make_basestation_connector(host, port, coordinator, use_kalman_data):
     factory = functools.partial(BasestationClient,
+                                coordinator=coordinator,
+                                use_kalman_data=use_kalman_data)
+    return net.MonitoringConnector(host, port, 30.0, factory)
+
+
+class BeastClient(object):
+    """Streams MLAT solutions using Beast binary frames."""
+
+    HEARTBEAT = b'\x1A1\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+    def __init__(self, reader, writer, *, coordinator, use_kalman_data, heartbeat_interval=30.0):
+        peer = writer.get_extra_info('peername')
+        self.host = peer[0]
+        self.port = peer[1]
+        self.logger = util.TaggingLogger(logging.getLogger("beast"),
+                                         {'tag': '{host}:{port}'.format(host=self.host,
+                                                                        port=self.port)})
+        self.reader = reader
+        self.writer = writer
+        self.coordinator = coordinator
+        self.use_kalman_data = use_kalman_data
+        self.heartbeat_interval = heartbeat_interval
+        self.last_output = time.time()
+        self.heartbeat_task = asyncio.ensure_future(self.send_heartbeats())
+        self.reader_task = asyncio.ensure_future(self.read_until_eof())
+
+        self.logger.warning("Connection established")
+        self.coordinator.add_output_handler(self.write_result)
+
+    def close(self):
+        if not self.writer:
+            return
+
+        self.logger.info("Connection lost")
+        self.coordinator.remove_output_handler(self.write_result)
+        self.heartbeat_task.cancel()
+        self.writer.close()
+        self.writer = None
+
+    async def wait_closed(self):
+        await util.safe_wait([self.heartbeat_task, self.reader_task])
+
+    async def read_until_eof(self):
+        try:
+            while True:
+                data = await self.reader.read(1024)
+                if len(data) == 0:
+                    self.logger.info("Client EOF")
+                    self.close()
+                    return
+        except socket.error:
+            self.close()
+
+    async def send_heartbeats(self):
+        try:
+            while True:
+                now = time.time()
+                delay = self.last_output + self.heartbeat_interval - now
+                if delay > 0.1:
+                    await asyncio.sleep(delay)
+                    continue
+
+                self._send_raw(self.HEARTBEAT)
+                self.last_output = now
+        except socket.error:
+            self.close()
+
+    def write_result(self, receive_timestamp, address, ecef, ecef_cov, receivers, distinct, dof, kalman_data, error):
+        try:
+            ac = self.coordinator.tracker.aircraft[address]
+
+            lat = lon = alt_m = None
+            speed_knots = None
+            heading_deg = None
+            vrate_fpm = None
+
+            if self.use_kalman_data:
+                if not kalman_data.valid and dof < 1:
+                    if receive_timestamp - ac.last_crappy_output > 60:
+                        ac.last_crappy_output = receive_timestamp - 1
+                        return
+                    if receive_timestamp - ac.last_crappy_output > 30 or receive_timestamp == ac.last_crappy_output:
+                        ac.last_crappy_output = receive_timestamp
+                    else:
+                        return
+
+                lat, lon, alt_m = geodesy.ecef2llh(ecef)
+                if kalman_data.valid and kalman_data.last_update >= receive_timestamp:
+                    speed_knots = kalman_data.ground_speed * constants.MS_TO_KTS
+                    heading_deg = kalman_data.heading
+                    vrate_fpm = kalman_data.vertical_speed * constants.MS_TO_FPM
+            else:
+                lat, lon, alt_m = geodesy.ecef2llh(ecef)
+
+            altitude_ft = None
+            if ac.last_altitude_time and receive_timestamp - ac.last_altitude_time < 5:
+                altitude_ft = ac.altitude
+            elif alt_m is not None:
+                altitude_ft = int(round(alt_m * constants.MTOF))
+
+            if vrate_fpm is None and ac.vrate_time and receive_timestamp - ac.vrate_time < 5:
+                vrate_fpm = ac.vrate
+
+            ns_knots = None
+            ew_knots = None
+            if speed_knots is not None and heading_deg is not None:
+                heading_rad = math.radians(heading_deg)
+                ns_knots = speed_knots * math.cos(heading_rad)
+                ew_knots = speed_knots * math.sin(heading_rad)
+
+            frames = []
+            df = beastframes.DF18
+
+            if lat is not None and lon is not None:
+                frames.extend(beastframes.make_position_frame_pair(address, lat, lon, altitude_ft, df=df))
+            elif altitude_ft is not None:
+                frames.append(beastframes.make_altitude_only_frame(address, altitude_ft, df=df))
+
+            if ns_knots is not None or ew_knots is not None or vrate_fpm is not None:
+                frames.append(beastframes.make_velocity_frame(address, ns_knots, ew_knots, vrate_fpm, df=df))
+
+            for frame in frames:
+                self._send_beast_frame(frame)
+
+        except Exception:
+            self.logger.exception("Failed to write Beast result")
+
+    def _send_raw(self, payload):
+        if not self.writer:
+            return
+        self.writer.write(payload)
+
+    def _send_beast_frame(self, frame):
+        if not self.writer:
+            return
+
+        encoded = bytearray(b'\x1A3\xFF\x00MLAT\x00')
+        for byte in frame:
+            if byte == 0x1A:
+                encoded.append(byte)
+            encoded.append(byte)
+
+        self.writer.write(encoded)
+        self.last_output = time.time()
+
+
+def make_beast_listener(host, port, coordinator, use_kalman_data):
+    factory = functools.partial(BeastClient,
+                                coordinator=coordinator,
+                                use_kalman_data=use_kalman_data)
+    return net.MonitoringListener(host, port, factory,
+                                  logger=logging.getLogger('beast'),
+                                  description='Beast output listener')
+
+
+def make_beast_connector(host, port, coordinator, use_kalman_data):
+    factory = functools.partial(BeastClient,
                                 coordinator=coordinator,
                                 use_kalman_data=use_kalman_data)
     return net.MonitoringConnector(host, port, 30.0, factory)

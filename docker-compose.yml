@@ -5,7 +5,7 @@ services:
     container_name: mlat-server
     ports:
       - "40147:40147"
-      - "30003:30003"
+      - "30004:30004"
     volumes:
       - ./workdir:/app/workdir
-    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10", "--dump-pseudorange", "./workdir/pseudorange.json", "--basestation-listen", "0.0.0.0:30003"]
+    command: ["--work-dir", "./workdir", "--client-listen", "0.0.0.0:40147", "--status-interval", "10", "--dump-pseudorange", "./workdir/pseudorange.json", "--beast-connect", "194.209.200.36:30004"]

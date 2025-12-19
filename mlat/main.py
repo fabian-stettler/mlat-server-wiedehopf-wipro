@@ -136,6 +136,28 @@ class MlatServer(object):
                             type=port_or_hostport,
                             default=[])
 
+        parser.add_argument('--beast-connect',
+                    help="connect to a host:port and send Beast-format results.",
+                    action='append',
+                    type=hostport,
+                    default=[])
+        parser.add_argument('--beast-listen',
+                    help="listen on a [host:]port and send Beast-format results to clients that connect.",
+                    action='append',
+                    type=port_or_hostport,
+                    default=[])
+
+        parser.add_argument('--filtered-beast-connect',
+                    help="connect to a host:port and send Beast-format results based on filtered data.",
+                    action='append',
+                    type=hostport,
+                    default=[])
+        parser.add_argument('--filtered-beast-listen',
+                    help="listen on a [host:]port and send Beast-format results to clients that connect.",
+                    action='append',
+                    type=port_or_hostport,
+                    default=[])
+
     def add_util_args(self, parser):
         parser.add_argument('--work-dir',
                             help="directory for debug/stats output and blacklist",
@@ -209,6 +231,30 @@ class MlatServer(object):
                                                              port=port,
                                                              coordinator=self.coordinator,
                                                              use_kalman_data=True))
+
+        for host, port in args.beast_connect:
+            subtasks.append(output.make_beast_connector(host=host,
+                                                        port=port,
+                                                        coordinator=self.coordinator,
+                                                        use_kalman_data=False))
+
+        for host, port in args.beast_listen:
+            subtasks.append(output.make_beast_listener(host=host,
+                                                       port=port,
+                                                       coordinator=self.coordinator,
+                                                       use_kalman_data=False))
+
+        for host, port in args.filtered_beast_connect:
+            subtasks.append(output.make_beast_connector(host=host,
+                                                        port=port,
+                                                        coordinator=self.coordinator,
+                                                        use_kalman_data=True))
+
+        for host, port in args.filtered_beast_listen:
+            subtasks.append(output.make_beast_listener(host=host,
+                                                       port=port,
+                                                       coordinator=self.coordinator,
+                                                       use_kalman_data=True))
 
         for filename in args.write_csv:
             subtasks.append(output.LocalCSVWriter(coordinator=self.coordinator,
