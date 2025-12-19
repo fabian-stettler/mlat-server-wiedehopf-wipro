@@ -62,19 +62,33 @@ def load_pseudorange_data(filename: str) -> Dict[str, List[Dict]]:
     """
     mlat_data = {}
     
+    decoder = json.JSONDecoder()
     with open(filename, 'r') as f:
-        for line in f:
-            if line.strip():
-                entry = json.loads(line)
+        for line_no, raw_line in enumerate(f, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            idx = 0
+            while idx < len(line):
+                if line[idx].isspace():
+                    idx += 1
+                    continue
+                try:
+                    entry, next_idx = decoder.raw_decode(line, idx)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Ungültige Daten in {filename} (Zeile {line_no}): {exc}") from exc
+                idx = next_idx
+
                 icao = entry['icao'].lower()
-                
+            
                 # Konvertiere ECEF zu Lat/Lon
                 x, y, z = entry['ecef']
                 lat, lon, alt = ecef_to_lla(x, y, z)
-                
+            
                 if icao not in mlat_data:
                     mlat_data[icao] = []
-                
+            
                 mlat_data[icao].append({
                     'time': entry['time'],
                     'lat': lat,
@@ -209,22 +223,22 @@ def print_statistics(errors: List[Dict]):
     v_errors = [e['vertical_error'] for e in errors if e['vertical_error'] is not None]
     e_3d = [e['error_3d'] for e in errors]
     
-    print(f"\nAnzahl Vergleiche: {len(errors)}")
-    print(f"Verschiedene Flugzeuge: {len(set(e['icao'] for e in errors))}")
+    #print(f"\nAnzahl Vergleiche: {len(errors)}")
+    #print(f"Verschiedene Flugzeuge: {len(set(e['icao'] for e in errors))}")
     
     print(f"\n--- Horizontale Fehler ---")
     print(f"  Durchschnitt: {sum(h_errors) / len(h_errors):.1f} m")
     print(f"  Median: {sorted(h_errors)[len(h_errors) // 2]:.1f} m")
-    print(f"  Min: {min(h_errors):.1f} m")
-    print(f"  Max: {max(h_errors):.1f} m")
+    #print(f"  Min: {min(h_errors):.1f} m")
+    #print(f"  Max: {max(h_errors):.1f} m")
     print(f"  95%-Perzentil: {sorted(h_errors)[int(len(h_errors) * 0.95)]:.1f} m")
     
     if v_errors:
         print(f"\n--- Vertikale Fehler ---")
         print(f"  Durchschnitt: {sum(v_errors) / len(v_errors):.1f} m")
         print(f"  Median: {sorted(v_errors)[len(v_errors) // 2]:.1f} m")
-        print(f"  Min: {min(v_errors):.1f} m")
-        print(f"  Max: {max(v_errors):.1f} m")
+        #print(f"  Min: {min(v_errors):.1f} m")
+        #print(f"  Max: {max(v_errors):.1f} m")
     
     print(f"\n--- 3D Fehler ---")
     print(f"  Durchschnitt: {sum(e_3d) / len(e_3d):.1f} m")
